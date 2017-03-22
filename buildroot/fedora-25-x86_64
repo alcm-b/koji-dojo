@@ -1,4 +1,3 @@
-KOJI="koji -c /opt/koji-clients/kojiadmin/config"
 $KOJI hello
 $KOJI add-tag destination-tag --include-all --arches="x_86_64"
 $KOJI add-tag build-tag --include-all --arches="x86_64"

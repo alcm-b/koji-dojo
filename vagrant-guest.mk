@@ -17,5 +17,6 @@ sources:
 
 # Congigure Koji tags and repos then run a sample scratch build task
 rpm-scratch-build: scratchbuild ?= ./buildroot/fedora-25-noarch
+rpm-scratch-build: export KOJI = koji -c /opt/koji-clients/kojiadmin/config
 rpm-scratch-build:
 	$(scratchbuild)
