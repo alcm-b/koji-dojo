@@ -1,20 +1,12 @@
 #!/bin/bash
 
 set -x
+set -e
 
 create_koji_folders() {
-	echo "Create Koji folders"
-
-	cd /mnt
-	if [ ! -d koji ]
-	then
-	    echo "Creating koji folder"
-	    mkdir koji
-	fi
-	cd koji
 	echo "Creating koji folder structure"
-	mkdir {packages,repos,work,scratch}
-	chown apache.apache *
+	mkdir -p /mnt/koji/{packages,repos,work,scratch}
+	chown apache.apache /mnt/koji/*
 }
 
 allow_read_logs() {
@@ -30,7 +22,7 @@ allow_read_logs() {
 generate_ssl_certificates() {
 	echo "Generate SSL certificates"
 
-	IP=$(find-ip.py || echo "kojihub.local")
+	IP=$( ./find-ip.py || echo "koji-hub.local")
 
 	mkdir -p /etc/pki/koji/{certs,private,confs}
 
@@ -46,21 +38,21 @@ generate_ssl_certificates() {
 		CA_SAN="IP.1:${IP},DNS.1:localhost,DNS.2:${IP},IP.3:${ADDITIONAL_SAN},DNS.3:koji-hub,email:move"
 	fi
  
-	cat ssl.cnf | sed "s/email\:move/${CA_SAN}/"> $conf	cp ssl.cnf $conf
+	cat /opt/koji-dojo-vagrant/hub/etc/pki/koji/ssl.cnf | sed "s/email\:move/${CA_SAN}/"> $conf
+	# XXX mmm ??? cp ssl.cnf $conf
 
 	openssl genrsa -out private/koji_ca_cert.key 2048
-	openssl req -config $conf -new -x509 -subj "/C=US/ST=Drunken/L=Bed/O=IT/CN=koji-hub" -days 3650 -key private/koji_ca_cert.key -out koji_ca_cert.crt -extensions v3_ca
+	openssl req -config $conf -new -x509 -subj "/C=US/ST=Drunken/L=Bed/O=IT/CN=koji-hub" \
+		-days 3650 -key private/koji_ca_cert.key -out koji_ca_cert.crt -extensions v3_ca
 
 	cp private/koji_ca_cert.key private/kojihub.key
 	cp koji_ca_cert.crt certs/kojihub.crt
-
-	mkuser.sh kojiweb admin
-	mkuser.sh kojiadmin admin
-	mkuser.sh testadmin admin
-	mkuser.sh testuser
-
-	mkuser.sh kojibuilder builder
-
+	cd -
+	sh ./mkuser.sh kojiweb admin
+	sh ./mkuser.sh kojiadmin admin
+	sh ./mkuser.sh testadmin admin
+	sh ./mkuser.sh testuser
+	sh ./mkuser.sh kojibuilder builder
 
 	chown -R nobody:nobody /opt/koji-clients
 }
@@ -68,7 +60,7 @@ generate_ssl_certificates() {
 create_koji_config_for_root() {
 	echo "Create /root/.koji/config for user root"
 
-	mkdir /root/.koji
+	mkdir -p /root/.koji
 
 	cat <<EOF >> /root/.koji/config
 [koji]

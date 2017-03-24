@@ -1,10 +1,12 @@
 #!/bin/bash
 
 set -x
+set -e
 
-psql="psql --host=koji-db --username=koji koji"
+# generate SQL INSERT for populating user account database
+psql='tee -a koji-users.sql'
 
-IP=$(find-ip.py || "koji-hub.local")
+IP=$( ./find-ip.py || echo "koji-hub.local")
 
 user=$1
 kind=$2
@@ -24,12 +26,10 @@ else
 fi
 
 if [ "x$kind" == "xadmin" ]; then
-	uid=$(echo "select id from users where name = '${user}'" | $psql | tail -3 | head -1)
 	echo "Assigning admin privileges to: ${user} with uid: ${uid}"
-	echo "INSERT INTO user_perms (user_id, perm_id, creator_id) VALUES (${uid}, 1, ${uid});" | $psql
+	echo "INSERT INTO user_perms (user_id, perm_id, creator_id) \
+		SELECT id, 1, id FROM users WHERE name = '${user}';" | $psql
 fi
-
-cd /etc/pki/koji
 
 #if you change your certificate authority name to something else you will need to change the caname value to reflect the change.
 caname="koji"
@@ -39,19 +39,23 @@ user=$1
 password="mypassword"
 conf=confs/${user}-ssl.cnf
 
-openssl genrsa -out private/${user}.key 2048
-cp ssl.cnf $conf
+cp ../etc/pki/koji/ssl.cnf  /etc/pki/koji/$conf
 
+cd /etc/pki/koji
+openssl genrsa -out private/${user}.key 2048
 openssl req -config $conf -new -nodes -out certs/${user}.csr -key private/${user}.key \
-            -subj "/C=US/ST=Drunken/L=Bed/O=IT/CN=${user}/emailAddress=${user}@kojihub.local"
+	-subj "/C=US/ST=Drunken/L=Bed/O=IT/CN=${user}/emailAddress=${user}@kojihub.local"
 
 openssl ca -config $conf -batch -keyfile private/${caname}_ca_cert.key -cert ${caname}_ca_cert.crt \
-		   -out certs/${user}-crtonly.crt -outdir certs -infiles certs/${user}.csr
+	-out certs/${user}-crtonly.crt -outdir certs -infiles certs/${user}.csr
 
-openssl pkcs12 -export -inkey private/${user}.key -passout "pass:${password}" -in certs/${user}-crtonly.crt -certfile ${caname}_ca_cert.crt -CAfile ${caname}_ca_cert.crt -chain -clcerts \
-			   -out certs/${user}_browser_cert.p12
+openssl pkcs12 -export -inkey private/${user}.key -passout "pass:${password}" \
+	-in certs/${user}-crtonly.crt -certfile ${caname}_ca_cert.crt \
+	-CAfile ${caname}_ca_cert.crt -chain -clcerts -out certs/${user}_browser_cert.p12
 
-openssl pkcs12 -clcerts -passin "pass:${password}" -passout "pass:${password}" -in certs/${user}_browser_cert.p12 -inkey private/${user}.key -out certs/${user}.pem
+openssl pkcs12 -clcerts -passin "pass:${password}" -passout "pass:${password}" \
+	-in certs/${user}_browser_cert.p12 -inkey private/${user}.key \
+	-out certs/${user}.pem
 
 cat certs/${user}-crtonly.crt private/${user}.key > certs/${user}.crt
 
