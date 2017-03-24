@@ -20,41 +20,40 @@ allow_read_logs() {
 }
 
 generate_ssl_certificates() {
-	echo "Generate SSL certificates"
+    echo "Generate SSL certificates"
 
-	IP=$( ./find-ip.py || echo "koji-hub.local")
+    IP=$( ./find-ip.py || echo "koji-hub.local")
 
-	mkdir -p /etc/pki/koji/{certs,private,confs}
+    mkdir -p /etc/pki/koji/{certs,private,confs}
 
-	cd /etc/pki/koji
+    # CA
+    CA_SAN="IP.1:${IP},DNS.1:localhost,DNS.2:${IP},email:move"
+    if [ -n "$ADDITIONAL_SAN" ]; then
+            CA_SAN="IP.1:${IP},DNS.1:localhost,DNS.2:${IP},IP.3:${ADDITIONAL_SAN},DNS.3:koji-hub,email:move"
+    fi
+    conf=/etc/pki/koji/confs/ca.cnf
+    cat ../etc/pki/koji/ssl.cnf | sed "s/email\:move/${CA_SAN}/"> $conf
 
-	touch index.txt
-	echo 01 > serial
+    cd /etc/pki/koji
 
-	# CA
-	conf=confs/ca.cnf
-	CA_SAN="IP.1:${IP},DNS.1:localhost,DNS.2:${IP},email:move"
-	if [ -n "$ADDITIONAL_SAN" ]; then
-		CA_SAN="IP.1:${IP},DNS.1:localhost,DNS.2:${IP},IP.3:${ADDITIONAL_SAN},DNS.3:koji-hub,email:move"
-	fi
- 
-	cat /opt/koji-dojo-vagrant/hub/etc/pki/koji/ssl.cnf | sed "s/email\:move/${CA_SAN}/"> $conf
-	# XXX mmm ??? cp ssl.cnf $conf
+    touch index.txt
+    echo 01 > serial
 
-	openssl genrsa -out private/koji_ca_cert.key 2048
-	openssl req -config $conf -new -x509 -subj "/C=US/ST=Drunken/L=Bed/O=IT/CN=koji-hub" \
-		-days 3650 -key private/koji_ca_cert.key -out koji_ca_cert.crt -extensions v3_ca
+    openssl genrsa -out private/koji_ca_cert.key 2048
+    openssl req -config $conf -new -x509 -subj "/C=US/ST=Drunken/L=Bed/O=IT/CN=koji-hub" \
+            -days 3650 -key private/koji_ca_cert.key -out koji_ca_cert.crt -extensions v3_ca
 
-	cp private/koji_ca_cert.key private/kojihub.key
-	cp koji_ca_cert.crt certs/kojihub.crt
-	cd -
-	sh ./mkuser.sh kojiweb admin
-	sh ./mkuser.sh kojiadmin admin
-	sh ./mkuser.sh testadmin admin
-	sh ./mkuser.sh testuser
-	sh ./mkuser.sh kojibuilder builder
+    cp private/koji_ca_cert.key private/kojihub.key
+    cp koji_ca_cert.crt certs/kojihub.crt
+    cd -
+    sh ./mkuser.sh kojiweb admin
+    sh ./mkuser.sh kojiadmin admin
+    sh ./mkuser.sh testadmin admin
+    sh ./mkuser.sh testuser
+    sh ./mkuser.sh kojibuilder builder
 
-	chown -R nobody:nobody /opt/koji-clients
+    chown -R nobody:nobody /opt/koji-clients
+
 }
 
 create_koji_config_for_root() {
